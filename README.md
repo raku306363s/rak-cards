@@ -129,6 +129,30 @@ entities:
 
 The visual editor lets you change the card title and select the light/switch entities. Custom per-tile labels and icons can be set in YAML as shown above.
 
+## RAK Lights Card: brightness and colour controls
+
+The standalone `custom:rak-lights-card` supports `light` and `switch` entities. Light tiles include a small adjustment icon. Select it to reveal the controls supported by that light:
+
+- Brightness slider for dimmable lights
+- Colour-temperature (CCT) slider for tunable-white lights, using Kelvin
+- RGB colour picker for RGB/HS/XY-capable colour lights
+- Switch entities remain on/off only
+
+Home Assistant receives `light.turn_on` calls with `brightness_pct`, `color_temp_kelvin`, or `rgb_color` as appropriate. Controls are shown according to each light entity's `supported_color_modes` and reported attributes. Home Assistant may convert RGB to the native colour mode supported by the light.
+
+```yaml
+type: custom:rak-lights-card
+name: Lights living room
+icon: mdi:lamps
+entities:
+  - entity: light.living_room_rgb
+    name: RGB Light
+  - entity: light.living_room_cct
+    name: CCT Light
+  - entity: switch.car_porch_light
+    name: Car Porch Light
+```
+
 ## Attribution and license
 
 This project is derived from **Engineer Ismail Cards**. The original MIT license and copyright notice are retained in `LICENSE`. The three-phase energy-card changes and independent RAK card packaging are modifications.
