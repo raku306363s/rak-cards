@@ -2,7 +2,7 @@
  * RAK Energy Card - independent three-phase Home Assistant Lovelace card.
  * Derived from Engineer Ismail Cards; original MIT license and attribution retained.
  */
-const RAK_ENERGY_VERSION = "1.0.0";
+const RAK_ENERGY_VERSION = "1.1.0";
 
 if (!customElements.get("rak-energy-card")) {
   (() => {
@@ -1345,6 +1345,114 @@ ha-icon{display:flex;--mdc-icon-size:22px}
       }
     }
 
+    // Power-only card with configurable threshold bands and colours
+    class RAKPowerCard extends EIBase {
+      static get defaults() {
+        return {
+          name: "Power",
+          icon: "mdi:flash",
+          max_power: 1000,
+          low_threshold: 50,
+          high_threshold: 200,
+          low_color: [22, 163, 74],
+          medium_color: [22, 163, 74],
+          high_color: [220, 38, 38],
+        };
+      }
+      getCardSize() {
+        return 4;
+      }
+      _ids() {
+        return [this._cfg.power].filter(Boolean);
+      }
+      _watts() {
+        return this._cfg.power ? watts(st(this._hass, this._cfg.power)) : null;
+      }
+      _limits() {
+        const c = this._cfg;
+        const lowValue = Number(c.low_threshold);
+        const highValue = Number(c.high_threshold);
+        const low = Number.isFinite(lowValue) ? Math.max(0, lowValue) : 50;
+        const high = Number.isFinite(highValue) ? Math.max(low, highValue) : Math.max(low, 200);
+        return { low, high };
+      }
+      _band(w) {
+        if (w == null) return null;
+        const { low, high } = this._limits();
+        if (w < low) return { key: "low", label: "Below " + low + " W", color: this._cfg.low_color };
+        if (w <= high)
+          return { key: "medium", label: low + "–" + high + " W", color: this._cfg.medium_color };
+        return { key: "high", label: "Above " + high + " W", color: this._cfg.high_color };
+      }
+      _vars(kindOver) {
+        const band = this._band(this._watts());
+        if (!band || band.color == null) return super._vars(kindOver);
+        const original = this._cfg;
+        this._cfg = Object.assign({}, original, { on_color: band.color });
+        try {
+          return super._vars(kindOver);
+        } finally {
+          this._cfg = original;
+        }
+      }
+      _html() {
+        const c = this._cfg;
+        const w = this._watts();
+        if (!c.power)
+          return this._wrap(
+            this._head(c.icon, c.name, "Not set up", "", false) +
+              '<div class="empty">Open the card settings and select a power sensor.</div>',
+          );
+        const band = this._band(w);
+        const known = w != null;
+        const live = known && w > 0;
+        const big =
+          !known
+            ? "--<small>W</small>"
+            : w >= 1000
+              ? (w / 1000).toFixed(2) + "<small>kW</small>"
+              : Math.round(w) + "<small>W</small>";
+        const max = Math.max(1, Number(c.max_power) || 1000);
+        const pct = known ? Math.max(0, w) / max : 0;
+        const badge =
+          '<span class="badge' +
+          (known ? " on" : "") +
+          '">' +
+          (known ? (live ? "Power detected" : "No load") : "No power data") +
+          "</span>";
+        const dial =
+          '<button data-a="more" data-v="' +
+          esc(c.power) +
+          '" style="border-radius:50%">' +
+          this._dial(
+            pct,
+            known,
+            '<div class="v' +
+              (known && w >= 1000 ? " sm" : "") +
+              '">' +
+              big +
+              '</div><div class="lb">Live power</div>',
+          ) +
+          "</button>";
+        return this._wrap(
+          this._head(c.icon, c.name, band ? band.label : "Unavailable", badge, known, ' data-a="none"') +
+            '<div class="dx" style="justify-content:center">' +
+            dial +
+            "</div>",
+        );
+      }
+      _act(a, v) {
+        if (a === "more") this._more(v);
+      }
+      static getConfigElement() {
+        return mkEditor("power");
+      }
+      static getStubConfig(h) {
+        const power = pick(h, (id, s) => dom(id) === "sensor" && dc(s) === "power", 1)[0];
+        return Object.assign({ name: "Power", icon: "mdi:flash" }, power ? { power } : {});
+      }
+    }
+
     // Page looks: background, top bar, sidebar, titles and dialogs
     const PAGE_THEMES = {
       midnight: {
@@ -2238,6 +2346,44 @@ ha-icon{display:flex;--mdc-icon-size:22px}
           },
         ],
       },
+      power: {
+        lists: [],
+        noLook: true,
+        schema: [
+          nameIcon("name"),
+          ent("power", { domain: "sensor", device_class: "power" }),
+          {
+            type: "grid",
+            name: "",
+            schema: [
+              {
+                name: "low_threshold",
+                selector: { number: { min: 0, max: 100000, step: 1, mode: "box", unit_of_measurement: "W" } },
+              },
+              {
+                name: "high_threshold",
+                selector: { number: { min: 0, max: 100000, step: 1, mode: "box", unit_of_measurement: "W" } },
+              },
+              {
+                name: "max_power",
+                selector: { number: { min: 1, max: 100000, step: 10, mode: "box", unit_of_measurement: "W" } },
+              },
+            ],
+          },
+          {
+            name: "ranges",
+            type: "expandable",
+            flatten: true,
+            title: "Threshold colours",
+            icon: "mdi:palette",
+            schema: [
+              { name: "low_color", selector: { color_rgb: {} } },
+              { name: "medium_color", selector: { color_rgb: {} } },
+              { name: "high_color", selector: { color_rgb: {} } },
+            ],
+          },
+        ],
+      },
       page: {
         lists: [],
         noLook: true,
@@ -2309,6 +2455,11 @@ ha-icon{display:flex;--mdc-icon-size:22px}
       current: "Current sensor",
       energy: "Energy sensor (kWh)",
       max_power: "Dial full at",
+      low_threshold: "Green below (W)",
+      high_threshold: "High range ends at (W)",
+      low_color: "Below threshold colour",
+      medium_color: "Middle range colour",
+      high_color: "Above threshold colour",
       style: "Look",
       background: "Background",
       text_color: "Text colour",
@@ -2365,6 +2516,15 @@ ha-icon{display:flex;--mdc-icon-size:22px}
         }
         const defaults = this.kind === "page" ? { style: "midnight", banner: true, cards_follow: true } : {};
         if (this.kind === "remote") Object.assign(defaults, { platform: "auto", show_apps: true });
+        if (this.kind === "power")
+          Object.assign(defaults, {
+            low_threshold: 50,
+            high_threshold: 200,
+            max_power: 1000,
+            low_color: [22, 163, 74],
+            medium_color: [22, 163, 74],
+            high_color: [220, 38, 38],
+          });
         const data = Object.assign(defaults, this._cfg);
         if (ALIAS[data.style]) data.style = ALIAS[data.style];
         sp.lists.forEach((k) => {
@@ -2398,8 +2558,9 @@ ha-icon{display:flex;--mdc-icon-size:22px}
       }
     }
 
-    // Register only the standalone RAK Energy Card and its config editor.
+    // Register both standalone RAK cards and the shared config editor.
     customElements.define("rak-energy-card", EIEnergyCard);
+    customElements.define("rak-power-card", RAKPowerCard);
     customElements.define("rak-energy-card-editor", EICardsEditor);
 
     window.customCards = window.customCards || [];
@@ -2409,8 +2570,15 @@ ha-icon{display:flex;--mdc-icon-size:22px}
       description: "Three-phase live power, voltage, current and total energy monitor.",
       preview: true,
     });
+    window.customCards.push({
+      type: "rak-power-card",
+      name: "RAK Power Card",
+      description: "Single power sensor card with editable watt thresholds and range colours.",
+      preview: true,
+    });
 
     window.RAK_ENERGY_CARD = { version: RAK_ENERGY_VERSION };
+    window.RAK_POWER_CARD = { version: RAK_ENERGY_VERSION };
     console.info("RAK Energy Card v" + RAK_ENERGY_VERSION + " loaded");
   })();
 }
