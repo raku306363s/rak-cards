@@ -10,7 +10,9 @@ This card is independently registered as `rak-energy-card` and does not register
 - Total live power calculated from the available phase power sensors
 - Individual phase readings in the card details
 - Optional total energy sensor
-- Visual configuration editor
+- Separate single-sensor RAK Power Card
+- Editable watt thresholds and individual range colours for the Power Card
+- Visual configuration editors
 - HACS-compatible repository layout
 
 ## Installation
@@ -58,6 +60,39 @@ max_power: 15000
 | `max_power` | Total power in watts represented by a full dial (default: 15000 W) |
 
 The total live power dial sums the configured phase power readings. The energy value is read from the single `energy` entity; it is not calculated by the card.
+
+## Power-only card
+
+Use `custom:rak-power-card` when you need a compact card for one power sensor. The dial colour changes automatically based on the configured watt ranges.
+
+```yaml
+type: custom:rak-power-card
+name: Load Monitor
+icon: mdi:flash
+power: sensor.spm02_wifi_power_a
+
+low_threshold: 50
+high_threshold: 200
+max_power: 3000
+
+low_color: [22, 163, 74]
+medium_color: [22, 163, 74]
+high_color: [220, 38, 38]
+```
+
+The defaults are green below 50 W, green from 50 W through 200 W, and red above 200 W. You can edit both thresholds and each range colour in the visual card editor or YAML. The thresholds are in watts; the card also converts sensors reported in kW to watts for comparison and display. `max_power` controls the dial scale only.
+
+| Option | Description | Default |
+|---|---|---|
+| `power` | Single power sensor | Required |
+| `low_threshold` | Upper limit of the first range, in watts | `50` |
+| `high_threshold` | Upper limit of the middle range, in watts | `200` |
+| `low_color` | Colour below the low threshold | Green |
+| `medium_color` | Colour between the thresholds, inclusive | Green |
+| `high_color` | Colour above the high threshold | Red |
+| `max_power` | Power represented by a full dial, in watts | `1000` |
+
+Colours can be supplied as RGB arrays (for example `[22, 163, 74]`) or CSS hex colours (for example `"#16a34a"`).
 
 ## Attribution and license
 
