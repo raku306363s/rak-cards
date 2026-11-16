@@ -2,7 +2,7 @@
  * RAK Energy Card - independent three-phase Home Assistant Lovelace card.
  * Derived from Engineer Ismail Cards; original MIT license and attribution retained.
  */
-const RAK_ENERGY_VERSION = "1.1.0";
+const RAK_ENERGY_VERSION = "1.2.0";
 
 if (!customElements.get("rak-energy-card")) {
   (() => {
@@ -1345,7 +1345,7 @@ ha-icon{display:flex;--mdc-icon-size:22px}
       }
     }
 
-    // Power-only card with configurable threshold bands and colours
+    // Power card with configurable single- or three-phase threshold bands and colours
     class RAKPowerCard extends EIBase {
       static get defaults() {
         return {
@@ -1362,11 +1362,24 @@ ha-icon{display:flex;--mdc-icon-size:22px}
       getCardSize() {
         return 4;
       }
+      _phaseSensors() {
+        const c = this._cfg;
+        return [
+          { label: "Phase A", entity: c.power },
+          { label: "Phase B", entity: c.power_b },
+          { label: "Phase C", entity: c.power_c },
+        ].filter((p) => !!p.entity);
+      }
       _ids() {
-        return [this._cfg.power].filter(Boolean);
+        return this._phaseSensors().map((p) => p.entity);
+      }
+      _phaseReadings() {
+        return this._phaseSensors().map((p) => Object.assign({}, p, { watts: watts(st(this._hass, p.entity)) }));
       }
       _watts() {
-        return this._cfg.power ? watts(st(this._hass, this._cfg.power)) : null;
+        const readings = this._phaseReadings();
+        if (!readings.length || readings.some((p) => p.watts == null)) return null;
+        return readings.reduce((sum, p) => sum + p.watts, 0);
       }
       _limits() {
         const c = this._cfg;
@@ -1397,12 +1410,13 @@ ha-icon{display:flex;--mdc-icon-size:22px}
       }
       _html() {
         const c = this._cfg;
-        const w = this._watts();
-        if (!c.power)
+        const phases = this._phaseReadings();
+        if (!phases.length)
           return this._wrap(
             this._head(c.icon, c.name, "Not set up", "", false) +
-              '<div class="empty">Open the card settings and select a power sensor.</div>',
+              '<div class="empty">Open the card settings and select one or more phase power sensors.</div>',
           );
+        const w = this._watts();
         const band = this._band(w);
         const known = w != null;
         const live = known && w > 0;
@@ -1414,15 +1428,17 @@ ha-icon{display:flex;--mdc-icon-size:22px}
               : Math.round(w) + "<small>W</small>";
         const max = Math.max(1, Number(c.max_power) || 1000);
         const pct = known ? Math.max(0, w) / max : 0;
+        const available = phases.filter((p) => p.watts != null).length;
+        const phaseStatus = available + "/" + phases.length + " phases available";
         const badge =
           '<span class="badge' +
           (known ? " on" : "") +
           '">' +
-          (known ? (live ? "Power detected" : "No load") : "No power data") +
+          (known ? (live ? "Power detected" : "No load") : phaseStatus) +
           "</span>";
         const dial =
           '<button data-a="more" data-v="' +
-          esc(c.power) +
+          esc(phases[0].entity) +
           '" style="border-radius:50%">' +
           this._dial(
             pct,
@@ -1431,13 +1447,29 @@ ha-icon{display:flex;--mdc-icon-size:22px}
               (known && w >= 1000 ? " sm" : "") +
               '">' +
               big +
-              '</div><div class="lb">Live power</div>',
+              '</div><div class="lb">Total live power</div>',
           ) +
           "</button>";
+        const formatPhase = (value) =>
+          value == null ? "Unavailable" : value >= 1000 ? (value / 1000).toFixed(2) + " kW" : Math.round(value) + " W";
+        const phaseRows = phases.map((p) =>
+          '<button class="row" data-a="more" data-v="' +
+          esc(p.entity) +
+          '"><span>' +
+          p.label +
+          "</span><b>" +
+          formatPhase(p.watts) +
+          "</b></button>"
+        );
+        const side = phases.length > 1
+          ? '<div class="side" style="--rc:' + phases.length + '">' + phaseRows.join("") + "</div>"
+          : "";
+        const sub = band ? band.label : known ? "Power available" : "Waiting for phase readings";
         return this._wrap(
-          this._head(c.icon, c.name, band ? band.label : "Unavailable", badge, known, ' data-a="none"') +
+          this._head(c.icon, c.name, sub, badge, live, ' data-a="none"') +
             '<div class="dx" style="justify-content:center">' +
             dial +
+            side +
             "</div>",
         );
       }
@@ -1448,8 +1480,12 @@ ha-icon{display:flex;--mdc-icon-size:22px}
         return mkEditor("power");
       }
       static getStubConfig(h) {
-        const power = pick(h, (id, s) => dom(id) === "sensor" && dc(s) === "power", 1)[0];
-        return Object.assign({ name: "Power", icon: "mdi:flash" }, power ? { power } : {});
+        const powers = pick(h, (id, s) => dom(id) === "sensor" && dc(s) === "power", 3);
+        const o = { name: "Power", icon: "mdi:flash" };
+        if (powers[0]) o.power = powers[0];
+        if (powers[1]) o.power_b = powers[1];
+        if (powers[2]) o.power_c = powers[2];
+        return o;
       }
     }
 
@@ -2352,6 +2388,8 @@ ha-icon{display:flex;--mdc-icon-size:22px}
         schema: [
           nameIcon("name"),
           ent("power", { domain: "sensor", device_class: "power" }),
+          ent("power_b", { domain: "sensor", device_class: "power" }),
+          ent("power_c", { domain: "sensor", device_class: "power" }),
           {
             type: "grid",
             name: "",
@@ -2425,6 +2463,11 @@ ha-icon{display:flex;--mdc-icon-size:22px}
       },
     };
     const KIND_LABELS = {
+      power: {
+        power: "Phase A power sensor",
+        power_b: "Phase B power sensor",
+        power_c: "Phase C power sensor",
+      },
       page: {
         style: "Page look",
         title: "Banner title (empty = Good morning / evening)",
@@ -2573,7 +2616,7 @@ ha-icon{display:flex;--mdc-icon-size:22px}
     window.customCards.push({
       type: "rak-power-card",
       name: "RAK Power Card",
-      description: "Single power sensor card with editable watt thresholds and range colours.",
+      description: "Single- or three-phase total power monitor with editable watt thresholds and range colours.",
       preview: true,
     });
 
