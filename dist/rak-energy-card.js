@@ -2,7 +2,7 @@
  * RAK Energy Card - independent three-phase Home Assistant Lovelace card.
  * Derived from Engineer Ismail Cards; original MIT license and attribution retained.
  */
-const RAK_ENERGY_VERSION = "1.3.0";
+const RAK_ENERGY_VERSION = "1.4.0";
 
 if (!customElements.get("rak-energy-card")) {
   (() => {
@@ -329,6 +329,24 @@ ha-icon{display:flex;--mdc-icon-size:22px}
 .solid .t.on .s{color:color-mix(in srgb,var(--atx) 70%,transparent)}
 .t.un{opacity:.42}
 
+/* RAK light adjustment controls */
+.t{position:relative}
+.tile-control{position:absolute;right:9px;top:9px;width:30px;height:30px;border-radius:10px;display:grid;place-items:center;
+  color:var(--tx);background:color-mix(in srgb,var(--solid) 78%,transparent);border:1px solid var(--tileb);opacity:.86;cursor:pointer}
+.tile-control ha-icon{--mdc-icon-size:18px}
+.tile-control.selected{color:var(--a1);border-color:var(--a2);opacity:1}
+.light-controls{margin-top:12px;padding:14px;border-radius:18px;background:var(--tile);border:1px solid var(--tileb);display:grid;gap:12px;min-width:0}
+.light-controls-head{display:flex;align-items:center;justify-content:space-between;gap:10px;min-width:0}
+.light-controls-title{font-size:14px;font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.light-controls-close{width:32px;height:32px;flex:none;border-radius:10px;display:grid;place-items:center;background:var(--tileb);color:var(--tx)}
+.light-control-row{display:grid;gap:7px;min-width:0}
+.light-control-label{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px;color:var(--mut)}
+.light-control-label b{color:var(--tx);font-size:12px;font-weight:650}
+.light-controls input[type=range]{width:100%;accent-color:var(--a2);cursor:pointer}
+.light-control-color{display:flex;align-items:center;gap:10px}
+.light-control-color input[type=color]{width:54px;height:38px;padding:3px;border:1px solid var(--tileb);border-radius:10px;background:var(--solid);cursor:pointer}
+.light-control-hint{font-size:11px;color:var(--mut);line-height:1.4}
+
 /* dial (AC + energy) */
 .dx{display:flex;align-items:center;gap:18px;margin-top:16px}
 .dial{--sz:156px;width:var(--sz);height:var(--sz);border-radius:50%;flex:none;position:relative;display:grid;place-items:center;
@@ -407,6 +425,7 @@ ha-icon{display:flex;--mdc-icon-size:22px}
           if (t) this._act(t.dataset.a, t.dataset.v || "", t);
         });
         sr.addEventListener("pointerdown", (e) => {
+          if (e.target.closest("[data-skip-longpress]")) return;
           const t = e.target.closest("[data-m]");
           if (!t) return;
           this._lpXY = [e.clientX, e.clientY];
@@ -620,6 +639,9 @@ ha-icon{display:flex;--mdc-icon-size:22px}
         const v = dom(id) === "climate" ? s.attributes.current_temperature : num(s);
         return v == null ? null : (+v).toFixed(1) + DEG;
       }
+      _tileExtra(e, s) {
+        return "";
+      }
       _html() {
         const c = this._cfg,
           h = this._hass,
@@ -672,7 +694,9 @@ ha-icon{display:flex;--mdc-icon-size:22px}
                   esc(nm) +
                   '</span><span class="s" style="display:block">' +
                   ds +
-                  "</span></span></button>"
+                  "</span></span>" +
+                  this._tileExtra(e, s) +
+                  "</button>"
                 );
               })
               .join("") +
@@ -708,10 +732,155 @@ ha-icon{display:flex;--mdc-icon-size:22px}
       }
     }
 
-    // Standalone lights/switches card with an editable title and optional per-tile names.
+    // Standalone lights/switches card with editable title, names, brightness, CCT and RGB controls.
     class RAKLightsCard extends EIRoomCard {
       static get defaults() {
         return { name: "Lights", icon: "mdi:lightbulb-group", entities: [] };
+      }
+      static get css() {
+        return `
+.light-controls{animation:rakLightOpen .18s ease-out}
+@keyframes rakLightOpen{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+@container (min-width:600px){.light-controls{padding:16px}.light-control-row{gap:8px}}
+`;
+      }
+      constructor() {
+        super();
+        this._selectedLight = null;
+        this.shadowRoot.addEventListener("change", (event) => this._handleLightControl(event));
+        this.shadowRoot.addEventListener("keydown", (event) => {
+          const target = event.target;
+          if (!target || !target.matches || !target.matches(".tile-control")) return;
+          if (event.key !== "Enter" && event.key !== " ") return;
+          event.preventDefault();
+          this._act("light-controls", target.dataset.v || "", target);
+        });
+      }
+      getCardSize() {
+        return super.getCardSize() + (this._selectedLight ? 3 : 0);
+      }
+      _extra() {
+        return this._selectedLight || "";
+      }
+      _tileExtra(e, s) {
+        if (dom(e.entity) !== "light") return "";
+        const selected = this._selectedLight === e.entity;
+        return (
+          '<span class="tile-control' +
+          (selected ? " selected" : "") +
+          '" role="button" tabindex="0" data-a="light-controls" data-v="' +
+          esc(e.entity) +
+          '" data-skip-longpress="1" aria-label="Adjust ' +
+          esc(e.name || fname(this._hass, e.entity)) +
+          '"><ha-icon icon="mdi:tune-variant"></ha-icon></span>'
+        );
+      }
+      _rgbHex(attributes) {
+        const rgb = attributes.rgb_color;
+        if (Array.isArray(rgb) && rgb.length >= 3) {
+          return "#" + rgb.slice(0, 3).map((v) => Math.max(0, Math.min(255, Math.round(Number(v) || 0))).toString(16).padStart(2, "0")).join("");
+        }
+        const hs = attributes.hs_color;
+        if (Array.isArray(hs) && hs.length >= 2) {
+          const h = (((Number(hs[0]) || 0) % 360) + 360) % 360 / 60;
+          const sat = Math.max(0, Math.min(100, Number(hs[1]) || 0)) / 100;
+          const chroma = sat;
+          const x = chroma * (1 - Math.abs((h % 2) - 1));
+          const sectors = [[chroma, x, 0], [x, chroma, 0], [0, chroma, x], [0, x, chroma], [x, 0, chroma], [chroma, 0, x]];
+          const base = sectors[Math.floor(h) % 6];
+          return "#" + base.map((v) => Math.round((v + 1 - chroma) * 255).toString(16).padStart(2, "0")).join("");
+        }
+        return "#ffffff";
+      }
+      _controlsMarkup() {
+        const id = this._selectedLight;
+        if (!id) return "";
+        const s = st(this._hass, id);
+        const name = fname(this._hass, id);
+        const head =
+          '<div class="light-controls-head"><div class="light-controls-title">' +
+          esc(name) +
+          '</div><button class="light-controls-close" data-a="close-light-controls" aria-label="Close light controls"><ha-icon icon="mdi:close"></ha-icon></button></div>';
+        if (unav(s)) {
+          return '<section class="light-controls">' + head + '<div class="light-control-hint">This light is unavailable right now.</div></section>';
+        }
+        const a = s.attributes || {};
+        const modes = Array.isArray(a.supported_color_modes) ? a.supported_color_modes : [];
+        const supportsBrightness = modes.some((m) => m !== "onoff") || a.brightness != null;
+        const supportsCct = modes.includes("color_temp") || a.min_color_temp_kelvin != null || a.color_temp_kelvin != null;
+        const supportsRgb = ["rgb", "rgbw", "rgbww", "hs", "xy"].some((m) => modes.includes(m)) || a.rgb_color != null || a.hs_color != null;
+        const parts = [head];
+        if (supportsBrightness) {
+          const brightness = a.brightness == null ? 100 : Math.max(1, Math.min(100, Math.round(Number(a.brightness) / 2.55)));
+          parts.push(
+            '<label class="light-control-row"><span class="light-control-label"><span>Brightness</span><b>' +
+            brightness +
+            '%</b></span><input type="range" min="1" max="100" step="1" value="' +
+            brightness +
+            '" data-light-control="brightness" data-entity="' + esc(id) + '" aria-label="Brightness for ' + esc(name) + '"></label>'
+          );
+        }
+        if (supportsCct) {
+          const minK = Math.max(1000, Number(a.min_color_temp_kelvin) || 2000);
+          const maxK = Math.max(minK, Number(a.max_color_temp_kelvin) || 6500);
+          const currentK = Math.max(minK, Math.min(maxK, Number(a.color_temp_kelvin) || Math.round((minK + maxK) / 2)));
+          parts.push(
+            '<label class="light-control-row"><span class="light-control-label"><span>Colour temperature (CCT)</span><b>' +
+            currentK +
+            ' K</b></span><input type="range" min="' + minK + '" max="' + maxK + '" step="50" value="' +
+            currentK +
+            '" data-light-control="cct" data-entity="' + esc(id) + '" aria-label="Colour temperature for ' + esc(name) + '"><span class="light-control-label"><span>Warm</span><span>Cool</span></span></label>'
+          );
+        }
+        if (supportsRgb) {
+          parts.push(
+            '<div class="light-control-row"><span class="light-control-label"><span>RGB colour</span><b>Choose colour</b></span><div class="light-control-color"><input type="color" value="' +
+            this._rgbHex(a) +
+            '" data-light-control="rgb" data-entity="' + esc(id) + '" aria-label="RGB colour for ' + esc(name) + '"><span class="light-control-hint">The selected colour is sent to Home Assistant. It converts the RGB value to the colour mode supported by this light.</span></div></div>'
+          );
+        }
+        if (!supportsBrightness && !supportsCct && !supportsRgb) {
+          parts.push('<div class="light-control-hint">This light reports on/off support only, so brightness and colour controls are not available.</div>');
+        }
+        return '<section class="light-controls">' + parts.join("") + "</section>";
+      }
+      _html() {
+        const html = super._html();
+        if (!this._selectedLight) return html;
+        const pos = html.lastIndexOf("</div>");
+        if (pos < 0) return html;
+        return html.slice(0, pos) + this._controlsMarkup() + html.slice(pos);
+      }
+      _handleLightControl(event) {
+        const input = event.target;
+        if (!input || !input.dataset || !input.dataset.lightControl) return;
+        const id = input.dataset.entity;
+        if (!id || dom(id) !== "light") return;
+        const kind = input.dataset.lightControl;
+        const data = { entity_id: id, transition: 0.2 };
+        if (kind === "brightness") {
+          data.brightness_pct = Math.max(1, Math.min(100, Number(input.value) || 1));
+        } else if (kind === "cct") {
+          data.color_temp_kelvin = Math.round(Number(input.value));
+        } else if (kind === "rgb") {
+          const hex = String(input.value || "#ffffff").replace("#", "");
+          if (!/^[0-9a-f]{6}$/i.test(hex)) return;
+          data.rgb_color = [0, 2, 4].map((offset) => parseInt(hex.slice(offset, offset + 2), 16));
+        } else {
+          return;
+        }
+        this._call("light", "turn_on", data);
+      }
+      _act(action, value, element) {
+        if (action === "light-controls") {
+          this._selectedLight = value;
+          this._redraw();
+        } else if (action === "close-light-controls") {
+          this._selectedLight = null;
+          this._redraw();
+        } else {
+          super._act(action, value, element);
+        }
       }
       static getConfigElement() {
         return mkEditor("lights");
@@ -2649,7 +2818,7 @@ ha-icon{display:flex;--mdc-icon-size:22px}
     window.customCards.push({
       type: "rak-lights-card",
       name: "RAK Lights Card",
-      description: "Lights and switches grid with an editable card title and optional custom tile names.",
+      description: "Lights and switches grid with editable title, per-light brightness, CCT and RGB controls.",
       preview: true,
     });
 
