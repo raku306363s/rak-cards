@@ -2,7 +2,7 @@
  * RAK Energy Card - independent three-phase Home Assistant Lovelace card.
  * Derived from Engineer Ismail Cards; original MIT license and attribution retained.
  */
-const RAK_ENERGY_VERSION = "1.2.0";
+const RAK_ENERGY_VERSION = "1.3.0";
 
 if (!customElements.get("rak-energy-card")) {
   (() => {
@@ -704,6 +704,23 @@ ha-icon{display:flex;--mdc-icon-size:22px}
           name: "Living Room",
           icon: "mdi:sofa-outline",
           entities: pick(h, (id) => /^(light|switch)\./.test(id), 4),
+        };
+      }
+    }
+
+    // Standalone lights/switches card with an editable title and optional per-tile names.
+    class RAKLightsCard extends EIRoomCard {
+      static get defaults() {
+        return { name: "Lights", icon: "mdi:lightbulb-group", entities: [] };
+      }
+      static getConfigElement() {
+        return mkEditor("lights");
+      }
+      static getStubConfig(h) {
+        return {
+          name: "Lights",
+          icon: "mdi:lightbulb-group",
+          entities: pick(h, (id) => ["light", "switch"].includes(dom(id)), 4),
         };
       }
     }
@@ -2271,6 +2288,14 @@ ha-icon{display:flex;--mdc-icon-size:22px}
       ],
     });
     const SCHEMAS = {
+      lights: {
+        lists: ["entities"],
+        on: "Active tile colour",
+        schema: [
+          nameIcon("name"),
+          ent("entities", [{ domain: "light" }, { domain: "switch" }], true),
+        ],
+      },
       room: {
         lists: ["entities"],
         on: "Light on colour",
@@ -2463,6 +2488,7 @@ ha-icon{display:flex;--mdc-icon-size:22px}
       },
     };
     const KIND_LABELS = {
+      lights: { name: "Card title" },
       power: {
         power: "Phase A power sensor",
         power_b: "Phase B power sensor",
@@ -2509,7 +2535,7 @@ ha-icon{display:flex;--mdc-icon-size:22px}
       icon_color: "Icon colour",
       ok_color: "All-secure colour",
     };
-    const ENT_LABEL = { room: "Lights and switches", security: "Doors, windows, motion, locks" };
+    const ENT_LABEL = { room: "Lights and switches", lights: "Lights and switches", security: "Doors, windows, motion, locks" };
 
     async function ensureForm() {
       if (customElements.get("ha-form")) return;
@@ -2601,9 +2627,10 @@ ha-icon{display:flex;--mdc-icon-size:22px}
       }
     }
 
-    // Register both standalone RAK cards and the shared config editor.
+    // Register standalone RAK cards and the shared config editor.
     customElements.define("rak-energy-card", EIEnergyCard);
     customElements.define("rak-power-card", RAKPowerCard);
+    customElements.define("rak-lights-card", RAKLightsCard);
     customElements.define("rak-energy-card-editor", EICardsEditor);
 
     window.customCards = window.customCards || [];
@@ -2617,6 +2644,12 @@ ha-icon{display:flex;--mdc-icon-size:22px}
       type: "rak-power-card",
       name: "RAK Power Card",
       description: "Single- or three-phase total power monitor with editable watt thresholds and range colours.",
+      preview: true,
+    });
+    window.customCards.push({
+      type: "rak-lights-card",
+      name: "RAK Lights Card",
+      description: "Lights and switches grid with an editable card title and optional custom tile names.",
       preview: true,
     });
 
