@@ -61,30 +61,34 @@ max_power: 15000
 
 The total live power dial sums the configured phase power readings. The energy value is read from the single `energy` entity; it is not calculated by the card.
 
-## Power-only card
+## Power Card (single- or three-phase)
 
-Use `custom:rak-power-card` when you need a compact card for one power sensor. The dial colour changes automatically based on the configured watt ranges.
+Use `custom:rak-power-card` for a compact power monitor. You can configure one, two or three phase power sensors. When multiple phases are selected, the dial and threshold colour use the sum of all configured phase readings, and the card shows each phase separately.
 
 ```yaml
 type: custom:rak-power-card
-name: Load Monitor
+name: Total Power
 icon: mdi:flash
 power: sensor.spm02_wifi_power_a
+power_b: sensor.spm02_wifi_power_b
+power_c: sensor.spm02_wifi_power_c
 
 low_threshold: 50
 high_threshold: 200
-max_power: 3000
+max_power: 15000
 
 low_color: [22, 163, 74]
 medium_color: [22, 163, 74]
 high_color: [220, 38, 38]
 ```
 
-The defaults are green below 50 W, green from 50 W through 200 W, and red above 200 W. You can edit both thresholds and each range colour in the visual card editor or YAML. The thresholds are in watts; the card also converts sensors reported in kW to watts for comparison and display. `max_power` controls the dial scale only.
+The defaults are green below 50 W, green from 50 W through 200 W, and red above 200 W. Both thresholds and each range colour can be edited in the visual editor or YAML. Threshold comparisons are made in watts; sensors reported in kW are converted to watts. `max_power` controls the dial scale only. Existing single-sensor configurations using `power` continue to work.
 
 | Option | Description | Default |
 |---|---|---|
-| `power` | Single power sensor | Required |
+| `power` | Phase A power sensor (required for Phase A) | — |
+| `power_b` | Phase B power sensor (optional) | — |
+| `power_c` | Phase C power sensor (optional) | — |
 | `low_threshold` | Upper limit of the first range, in watts | `50` |
 | `high_threshold` | Upper limit of the middle range, in watts | `200` |
 | `low_color` | Colour below the low threshold | Green |
@@ -92,7 +96,7 @@ The defaults are green below 50 W, green from 50 W through 200 W, and red above 
 | `high_color` | Colour above the high threshold | Red |
 | `max_power` | Power represented by a full dial, in watts | `1000` |
 
-Colours can be supplied as RGB arrays (for example `[22, 163, 74]`) or CSS hex colours (for example `"#16a34a"`).
+The total is shown only when all configured phase sensors have valid readings, to avoid displaying an understated total when a phase is unavailable. Individual phase readings remain visible so you can identify a sensor that is offline. Colours can be supplied as RGB arrays (for example `[22, 163, 74]`) or CSS hex colours (for example `"#16a34a"`).
 
 ## Attribution and license
 
