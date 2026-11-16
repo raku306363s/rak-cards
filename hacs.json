@@ -1,0 +1,6 @@
+{
+  "name": "RAK Cards",
+  "filename": "rak-energy-card.js",
+  "render_readme": true,
+  "homeassistant": "2024.11.0"
+}
