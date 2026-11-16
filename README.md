@@ -98,6 +98,37 @@ The defaults are green below 50 W, green from 50 W through 200 W, and red above 
 
 The total is shown only when all configured phase sensors have valid readings, to avoid displaying an understated total when a phase is unavailable. Individual phase readings remain visible so you can identify a sensor that is offline. Colours can be supplied as RGB arrays (for example `[22, 163, 74]`) or CSS hex colours (for example `"#16a34a"`).
 
+## RAK Lights Card
+
+Use `custom:rak-lights-card` for a lights and switches grid like the room card layout. The **Card title** field is editable in the visual editor, so you can name it `Living Room Lights`, `Outdoor Lights`, or anything else. Use the entity selector to choose the lights and switches shown in the tiles. The header includes an All On / All Off control.
+
+```yaml
+type: custom:rak-lights-card
+name: Living Room Lights
+icon: mdi:lightbulb-group
+entities:
+  - light.living_room_main
+  - switch.living_room_warm_light
+  - switch.car_porch_light
+```
+
+You can also assign custom labels and icons to individual tiles in YAML:
+
+```yaml
+type: custom:rak-lights-card
+name: Ground Floor Lights
+icon: mdi:lightbulb-group
+entities:
+  - entity: light.living_room_main
+    name: Living Room Main Light
+    icon: mdi:ceiling-light
+  - entity: switch.car_porch_light
+    name: Car Porch Light
+    icon: mdi:coach-lamp
+```
+
+The visual editor lets you change the card title and select the light/switch entities. Custom per-tile labels and icons can be set in YAML as shown above.
+
 ## Attribution and license
 
 This project is derived from **Engineer Ismail Cards**. The original MIT license and copyright notice are retained in `LICENSE`. The three-phase energy-card changes and independent RAK card packaging are modifications.
