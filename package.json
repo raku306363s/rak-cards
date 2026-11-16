@@ -1,0 +1,7 @@
+{
+  "name": "rak-cards",
+  "version": "1.0.0",
+  "private": false,
+  "description": "RAK Energy Card for Home Assistant",
+  "license": "MIT"
+}
